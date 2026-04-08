@@ -1,0 +1,9 @@
+# Large archives
+*.rar
+
+# Large media/data artifacts
+*.mp4
+*.cache
+
+# Local training datasets (keep locally, don't push)
+wzry/datasets/

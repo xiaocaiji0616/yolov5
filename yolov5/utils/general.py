@@ -44,7 +44,7 @@ except (ImportError, AssertionError):
     os.system("pip install -U ultralytics")
     import ultralytics
 
-from ultralytics.utils.checks import check_requirements
+from ultralytics.utils.checks import check_requirements as ul_check_requirements
 from ultralytics.utils.patches import torch_load
 
 from utils import TryExcept, emojis
@@ -72,6 +72,29 @@ os.environ["OMP_NUM_THREADS"] = "1" if platform.system() == "darwin" else str(NU
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"  # suppress verbose TF compiler warnings in Colab
 os.environ["TORCH_CPP_LOG_LEVEL"] = "ERROR"  # suppress "NNPACK.cpp could not initialize NNPACK" warnings
 os.environ["KINETO_LOG_LEVEL"] = "5"  # suppress verbose PyTorch profiler output when computing FLOPs
+
+
+def check_requirements(requirements=ROOT / "requirements.txt", exclude=(), install=True, cmds=""):
+    """Checks dependencies via Ultralytics and retries without auto-install on marker parsing/install command issues.
+
+    This keeps runtime robust on Windows shells where nested quotes in requirement markers (e.g.
+    ``python_version > "3.8"``) can break auto-generated pip install commands.
+    """
+    # urllib3>=2.6.0 is guarded by python_version > '3.8' in requirements.txt.
+    # On Python 3.8, some upstream auto-install paths still attempt to resolve it and emit noisy warnings.
+    if sys.version_info[:2] <= (3, 8):
+        exclude = tuple(dict.fromkeys((*exclude, "urllib3")))
+
+    try:
+        return ul_check_requirements(requirements=requirements, exclude=exclude, install=install, cmds=cmds)
+    except Exception as e:
+        msg = str(e)
+        if "InvalidMarker" in msg or "python_version > 3.8" in msg or "non-zero exit status 2" in msg:
+            LOGGER.warning(
+                "requirements: ⚠️ AutoUpdate command parsing failed for a requirement marker; retrying with install=False."
+            )
+            return ul_check_requirements(requirements=requirements, exclude=exclude, install=False, cmds=cmds)
+        raise
 
 
 def is_ascii(s=""):
